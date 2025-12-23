@@ -4,7 +4,26 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"slices"
+	"strings"
 )
+
+func respondWithError(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(code)
+	w.Write([]byte(msg))
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	dat, err := json.Marshal(payload)
+	if err != nil {
+		respondWithError(w, 500, "Error marshalling JSON.")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(dat)
+}
 
 func handlerValidate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
@@ -20,43 +39,18 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type returnValid struct {
-		Valid bool `json:"valid"`
+	banned := []string{"kerfuffle", "sharbert", "fornax"}
+
+	if len(params.Body) >= 140 {
+		respondWithJSON(w, 400, map[string]string{"error": "Chirp too long"})
+		return
 	}
-
-	type returnError struct {
-		Error string `json:"error"`
-	}
-
-	var respValid returnValid
-	var respError returnError
-
-	if len(params.Body) <= 140 {
-		respValid.Valid = true
-		dat, err := json.Marshal(respValid)
-		if err != nil {
-			log.Printf("Error marshalling JSON: %s", err)
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(500)
-			w.Write([]byte(`{"error":"Something went wrong"`))
-			return
+	split := strings.Split(params.Body, " ")
+	for i, word := range split {
+		if slices.Contains(banned, strings.ToLower(word)) {
+			split[i] = "****"
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(200)
-		w.Write(dat)
-
-	} else {
-		respError.Error = "Chirp is too long"
-		dat, err := json.Marshal(respError)
-		if err != nil {
-			log.Printf("Error marshalling JSON: %s", err)
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(500)
-			w.Write([]byte(`{"error":"Something went wrong"`))
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(400)
-		w.Write(dat)
 	}
+	cleanedBody := strings.Join(split, " ")
+	respondWithJSON(w, 200, map[string]string{"cleaned_body": cleanedBody})
 }
