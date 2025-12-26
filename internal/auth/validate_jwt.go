@@ -8,12 +8,22 @@ import (
 )
 
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
-	token, err := jwt.ParseWithClaims(tokenString, jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
+	claims := &jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
 		return []byte(tokenSecret), nil
 	})
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to parse token: %w", err)
 	}
+
+	stringIssuer, err := token.Claims.GetIssuer()
+	if err != nil {
+		return uuid.UUID{}, fmt.Errorf("failed to get issuer from token to validate: %w", err)
+	}
+	if stringIssuer != "chirpy" {
+		return uuid.UUID{}, fmt.Errorf("provided issuer '%v' did not match 'chirpy': %w", stringIssuer, err)
+	}
+
 	stringID, err := token.Claims.GetSubject()
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to get user id from token: %w", err)
