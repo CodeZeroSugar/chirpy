@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/CodeZeroSugar/chirpy/internal/auth"
+	"github.com/CodeZeroSugar/chirpy/internal/database"
 )
 
 func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Password         string `json:"password"`
-		Email            string `json:"email"`
-		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
@@ -22,15 +22,6 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error decoding parameters: %s", err)
 		w.WriteHeader(500)
 		return
-	}
-
-	expiresIn := time.Hour
-
-	if params.ExpiresInSeconds > 0 {
-		if params.ExpiresInSeconds > 3600 {
-			params.ExpiresInSeconds = 3600
-		}
-		expiresIn = time.Duration(params.ExpiresInSeconds) * time.Second
 	}
 
 	user, err := cfg.dbQueries.FetchUser(r.Context(), params.Email)
@@ -50,19 +41,35 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.MakeJWT(user.ID, cfg.secret, expiresIn)
+	accessExpire := time.Hour
+	token, err := auth.MakeJWT(user.ID, cfg.secret, accessExpire)
 	if err != nil {
 		log.Printf("Error generating jwt token during login: %s", err)
 		w.WriteHeader(500)
 		return
 	}
 
+	refreshString, err := auth.MakeRefreshToken()
+	if err != nil {
+		log.Printf("Error creating string for refresh token: %v", err)
+		w.WriteHeader(500)
+	}
+	refreshTokenParams := database.CreateRefreshTokenParams{
+		Token:  refreshString,
+		UserID: user.ID,
+	}
+	refreshToken, err := cfg.dbQueries.CreateRefreshToken(r.Context(), refreshTokenParams)
+	if err != nil {
+		log.Printf("Error creating refresh token in database: %v", err)
+	}
+
 	userSuccess := User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-		Token:     token,
+		ID:           user.ID,
+		CreatedAt:    user.CreatedAt,
+		UpdatedAt:    user.UpdatedAt,
+		Email:        user.Email,
+		Token:        token,
+		RefreshToken: refreshToken.Token,
 	}
 
 	respondWithJSON(w, 200, userSuccess)
