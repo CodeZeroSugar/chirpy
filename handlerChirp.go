@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/CodeZeroSugar/chirpy/internal/auth"
 	"github.com/CodeZeroSugar/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -23,6 +24,19 @@ func (cfg *apiConfig) handlerChirp(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Error decoding parameters: %s", err)
 		w.WriteHeader(500)
+		return
+	}
+
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Error getting token from request: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	tokenID, err := auth.ValidateJWT(tokenString, cfg.secret)
+	if err != nil {
+		log.Printf("Error validating token: %v", err)
+		respondWithError(w, 401, "Token was invalid")
 		return
 	}
 
@@ -44,11 +58,12 @@ func (cfg *apiConfig) handlerChirp(w http.ResponseWriter, r *http.Request) {
 
 	chirpParams := database.CreateChirpParams{
 		Body:   params.Body,
-		UserID: params.UserID,
+		UserID: tokenID,
 	}
 	chirpDB, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
 	if err != nil {
-		respondWithError(w, 500, "Error adding chirp to databse")
+		log.Printf("Error adding chirp to database: %s", err)
+		respondWithError(w, 500, "Something went wrong, chirp was not posted\n")
 		return
 	}
 	c := Chirp{
