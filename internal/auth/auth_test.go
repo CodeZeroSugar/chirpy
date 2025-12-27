@@ -2,7 +2,9 @@ package auth
 
 import (
 	"fmt"
+	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,7 +90,6 @@ func TestValidateJWTExpired(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Expected expired token error, got: %v", err)
 		}
-		fmt.Printf("%v\n", err)
 		if !reflect.DeepEqual(tc.want, got) {
 			t.Fatalf("expected: %v, got: %v", tc.want, got)
 		}
@@ -116,9 +117,45 @@ func TestValidateJWTWrongIssuer(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Expected incorrect issuer error, got: %v", err)
 		}
-		fmt.Printf("%v\n", err)
 		if !reflect.DeepEqual(tc.want, got) {
 			t.Fatalf("expected: %v, got: %v", tc.want, got)
 		}
+	}
+}
+
+func TestGetBearerToken(t *testing.T) {
+	type GetBearerTokenTest struct {
+		header http.Header
+		want   string
+	}
+
+	req, err := http.NewRequest("Get", "www.example.com", nil)
+	if err != nil {
+		t.Fatalf("error created test request: %v", err)
+	}
+	token, err := MakeJWT(uuid.New(), "password123", 24*time.Hour)
+	if err != nil {
+		t.Fatalf("error creating test token: %v", err)
+	}
+	bearer := "Bearer  " + token
+	req.Header.Add("Authorization", bearer)
+
+	tests := []GetBearerTokenTest{
+		{req.Header, token},
+	}
+
+	for _, tc := range tests {
+		result, err := GetBearerToken(tc.header)
+		fmt.Printf("Comparing '%v' to '%v'\n", tc.want, result)
+		if err != nil {
+			t.Fatalf("Authorization header did not exists: %v", err)
+		}
+		if strings.Contains(result, "Bearer") {
+			t.Fatalf("key value 'Bearer' was not removed: %v", result)
+		}
+		if !reflect.DeepEqual(tc.want, result) {
+			t.Fatalf("expected: %v, got: %v", tc.want, result)
+		}
+
 	}
 }
