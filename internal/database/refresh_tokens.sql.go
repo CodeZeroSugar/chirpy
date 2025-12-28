@@ -71,6 +71,8 @@ FROM users
 JOIN refresh_tokens
 ON users.id = refresh_tokens.user_id
 WHERE refresh_tokens.token = $1
+  AND refresh_tokens.revoked_at IS NULL
+  AND refresh_tokens.expires_at > NOW()
 `
 
 type GetUserFromRefreshTokenRow struct {
@@ -99,6 +101,28 @@ func (q *Queries) GetUserFromRefreshToken(ctx context.Context, token string) (Ge
 		&i.Token,
 		&i.CreatedAt_2,
 		&i.UpdatedAt_2,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const revokeRefreshToken = `-- name: RevokeRefreshToken :one
+UPDATE refresh_tokens
+SET updated_at = NOW(),
+    revoked_at = NOW() 
+WHERE token = $1
+RETURNING token, created_at, updated_at, user_id, expires_at, revoked_at
+`
+
+func (q *Queries) RevokeRefreshToken(ctx context.Context, token string) (RefreshToken, error) {
+	row := q.db.QueryRowContext(ctx, revokeRefreshToken, token)
+	var i RefreshToken
+	err := row.Scan(
+		&i.Token,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 		&i.UserID,
 		&i.ExpiresAt,
 		&i.RevokedAt,

@@ -18,19 +18,13 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := cfg.dbQueries.FetchRefreshToken(r.Context(), token)
 	if err != nil {
 		log.Printf("could not fetch refresh token from database: %v", err)
-		respondWithError(w, 401, "refresh token does not exists")
-		return
-	}
-	refreshExpires := refreshToken.ExpiresAt
-	if refreshExpires.Before(time.Now()) {
-		log.Printf("refresh token is expired: %v", refreshExpires)
-		respondWithError(w, 401, "refresh token is expired")
+		respondWithError(w, 401, "refresh token is expired or does not exists")
 		return
 	}
 	user, err := cfg.dbQueries.GetUserFromRefreshToken(r.Context(), refreshToken.Token)
 	if err != nil {
 		log.Printf("could not get user from refresh token: %v", err)
-		w.WriteHeader(500)
+		respondWithError(w, 401, "refresh token is expired or does not exists")
 		return
 	}
 	expiresIn := time.Hour
