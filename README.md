@@ -150,5 +150,3 @@ Common status codes:
 - 500 – Internal server error
 
 ---
-
-You can copy and paste the above directly into your `README.md` file. Let me know if you'd like to add more sections (e.g., Testing, Contributing, License) or make any adjustments!
